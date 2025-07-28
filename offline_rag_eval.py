@@ -20,11 +20,34 @@ def parse_markdown_chunks(markdown_path):
 
     chunks = []
     current_title = ""
+    current_content = []
     chunk_id = 0
+
+    def flush_chunk():
+        nonlocal chunk_id
+        if current_content:
+            full_content = f"{current_title}:\n" + "\n".join(current_content)
+            chunks.append({
+                "id": f"chunk_{chunk_id}",
+                "title": current_title,
+                "content": full_content
+            })
+            chunk_id += 1
 
     for elem in soup.find_all(["h1", "h2", "h3", "p", "ul", "table"]):
         if elem.name in ["h1", "h2", "h3"]:
+            flush_chunk()
             current_title = elem.text.strip()
+            current_content = []
+
+        elif elem.name == "p":
+            text = elem.get_text(strip=True)
+            if text:
+                current_content.append(text)
+
+        elif elem.name == "ul":
+            items = [li.get_text(strip=True) for li in elem.find_all("li")]
+            current_content.append("• " + "\n• ".join(items))
 
         elif elem.name == "table":
             print(f"[Table] Found at chunk: {chunk_id}")
@@ -36,36 +59,12 @@ def parse_markdown_chunks(markdown_path):
                 row_dict = dict(zip(headers, values))
                 flat = ", ".join([f"{k} is {v}" for k, v in row_dict.items()])
                 sentences.append(flat)
-            content = f"{current_title}:\n" + " ".join(sentences)
+            current_content.append(" ".join(sentences))
 
-            chunks.append({
-                "id": f"chunk_{chunk_id}",
-                "title": current_title,
-                "content": content
-            })
-
-        elif elem.name == "ul":
-            items = [li.get_text(strip=True) for li in elem.find_all("li")]
-            content = f"{current_title}:\n" + ", ".join(items)
-            chunks.append({
-                "id": f"chunk_{chunk_id}",
-                "title": current_title,
-                "content": content
-            })
-
-        elif elem.name == "p":
-            text = elem.get_text(strip=True)
-            if text:
-                content = f"{current_title}:\n{text}"
-                chunks.append({
-                    "id": f"chunk_{chunk_id}",
-                    "title": current_title,
-                    "content": content
-                })
-
-        chunk_id += 1
-
+    flush_chunk()
+    print(f"✅ Parsed {len(chunks)} chunks from markdown.")
     return chunks
+
 
 # -----------------------------
 # 2. Split chunks
@@ -123,7 +122,7 @@ def token_iou(a, b):
     union = set_a | set_b
     return len(intersection) / len(union) if union else 0
 
-def evaluate_retrieval_semantic(db, eval_set, k=2):
+def evaluate_retrieval_semantic(db, eval_set, k=5):
     retriever = db.as_retriever(search_kwargs={"k": k})
     recall_count = 0
     mrr_total = 0
