@@ -24,7 +24,7 @@ retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 5, "lambda_mu
 print(f"✅ Embedding model and ChromaDB initialized in: {time.time() - step_start_time:.2f} seconds")
 
 # Step 2: Retrieve chunks
-query = "tell me about chessclub?"
+query = "Tell me about TSG"
 
 def retrieve_chunks(query, k=5):
     print(f"\n🔄 Retrieving chunks for query: '{query}'...")
@@ -37,11 +37,11 @@ chunks = retrieve_chunks(query)
 
 # Step 3: Build prompt
 def build_prompt(query, chunks):
-    print("\n🔄 Building prompt for LLM...")
+    print(f"\n🔄 Building prompt for LLM..., Length of chunks:{len(chunks)}")
     start = time.time()
     prompt_content = f"""Answer the following question based **only** on the retrieved content below.
     donot say any thing like "Based on the provided text" or "The text states that" or "According to the text" or "The text mentions that" or "The text says that" or "The text explains that" or "The text describes that" or "The text indicates that" or "The text reveals that" or "The text shows that" or "The text highlights that" or "The text suggests that" or "The text implies that".
-    Use emojis if needed.
+    Use emojis if needed. Explain clearly.
 Question:
 {query}
 
