@@ -1,12 +1,10 @@
 import os
 import requests
 from dotenv import load_dotenv
-from langchain_huggingface import HuggingFaceEmbeddings
 
 load_dotenv()
 
-def load_embed_model():
-    return HuggingFaceEmbeddings(model_name="intfloat/e5-base-v2")
+
 
 class InferenceEmbeddingWrapper:
     def __init__(self, model_id: str, token: str):

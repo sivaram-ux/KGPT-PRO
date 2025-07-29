@@ -8,13 +8,11 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
 from langchain_chroma import Chroma
-from vectorstore.chroma_utils import get_persist_dir
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
-from gemini.validator import ask_gemini_completion
-from load import load_inference_wrapper
-from config import default_model
 
+from load import load_inference_wrapper
+from vectorstore.chroma_utils import get_persist_dir
 # -------------------
 # ✅ FastAPI Setup
 # -------------------

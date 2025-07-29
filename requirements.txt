@@ -1,0 +1,16 @@
+# Core
+fastapi
+uvicorn
+
+# Env + Requests
+python-dotenv
+requests
+
+# Google Gemini
+google-generativeai
+google-api-core
+
+# LangChain + Vector DB
+langchain
+langchain-openai
+langchain-chroma
