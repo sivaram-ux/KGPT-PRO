@@ -1,21 +1,41 @@
-from parser.markdown_parser import parse_markdown_chunks
-from splitters.chunk_splitter import split_chunks
-from vectorstore.embedding import embed_and_store_with_chroma
+from langchain_chroma import Chroma
 from vectorstore.chroma_utils import get_persist_dir
-from eval.semantic_eval import evaluate_retrieval_semantic
-from eval.utils import find_duplicate_ids, find_duplicate_chunks
-from config import embedding_models, default_model
-from variables import table_markdown_file_name, eval_set
+from config import default_model
+from gemini.validator import ask_gemini_completion  # 👈 You will define this
+import sys
+from langchain_huggingface import HuggingFaceEmbeddings
+from variables import eval_set
+embedding = HuggingFaceEmbeddings(model_name="intfloat/e5-base-v2")
+persist_dir = get_persist_dir("intfloat/e5-base-v2")
+db = Chroma(persist_directory=persist_dir,embedding_function=embedding)
+retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 5, "lambda_mult": 0.5})
+def retrieve_chunks(question, k=5):
+    docs = retriever.invoke(question)
+    return [doc.page_content for doc in docs]
+
+def build_prompt(question, chunks):
+    return f"""Answer the following question based **only** on the retrieved content below.
+
+Question:
+{question}
+
+Retrieved Context:
+{chr(10).join(f"- {chunk}" for chunk in chunks)}
+"""
+
+def main():
+    for i,casee in enumerate(eval_set):
+        
+
+        print(f"\n🔍 Question {i+1}: {casee["question"]}")
+
+        chunks = retrieve_chunks(casee["question"])
+        print(f"\n📚 Retrieved {len(chunks)} chunks.\n")
+
+        prompt = build_prompt(casee["question"], chunks)
+        answer = ask_gemini_completion(prompt)
+        print("\n🧠 Gemini Answer:\n")
+        print(answer)
 
 if __name__ == "__main__":
-    chunks = parse_markdown_chunks(table_markdown_file_name)
-    chunks = split_chunks(chunks, max_tokens=3000, overlap=333)
-    find_duplicate_ids(chunks)
-    find_duplicate_chunks(chunks)
-    print(f"✅ Parsed and split into {len(chunks)} chunks.")
-
-    for model in embedding_models:
-        print(f"\n\n🔍 Using embedding model: {model}")
-        db = embed_and_store_with_chroma(chunks, model, persist_directory=get_persist_dir(model))
-        evaluate_retrieval_semantic(db, eval_set, model)
-        print("\n" + "=" * 50 + "\n")
+    main()

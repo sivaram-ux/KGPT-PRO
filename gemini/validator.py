@@ -54,3 +54,26 @@ Respond with "Yes" or "No".No other explanation.
             pass
 
     return "❌ All models failed. Try again later."
+
+
+
+def ask_gemini_completion(prompt: str) -> str:
+    global working_model
+    # If we already have a working model, try it first
+    if working_model:
+        try:
+            return working_model.generate_content(prompt).text.strip()
+        except:
+            working_model = None  # Invalidate and fallback to search
+
+    # Try each model only until one works
+    for name in model_names:
+        try:
+            model = GenerativeModel(name)
+            result = model.generate_content(prompt)
+            working_model = model  # Cache the successful one
+            return result.text.strip()
+        except:
+            pass
+
+    return "❌ All models failed. Try again later."
