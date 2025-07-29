@@ -6,4 +6,4 @@ embedding_models = [
     "intfloat/e5-large-v2",
     "BAAI/bge-large-en-v1.5"
 ]
-default_model = "thenlper/gte-base"
+default_model = "intfloat/e5-base-v2"

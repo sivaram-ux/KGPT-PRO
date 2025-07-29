@@ -16,6 +16,24 @@ def main():
     find_duplicate_chunks(chunks)
     print(f"✅ Parsed and split into {len(chunks)} chunks.")
 
+    # --- Start of new code ---
+    output_file = "mychunks.txt"
+    print(f"📝 Saving chunks to {output_file}...")
+    try:
+        with open(output_file, "w", encoding="utf-8") as f:
+            for i, chunk in enumerate(chunks):
+                # Assuming each chunk is a dictionary with 'id' and 'content' keys.
+                # Adjust 'chunk.get("id")' and 'chunk.get("content")' if your chunk structure is different.
+                chunk_id = chunk.get("id", f"unknown_id_{i}")
+                chunk_content = chunk.get("content", "No content available.")
+                f.write(f"--- Chunk ID: {chunk_id} ---\n")
+                f.write(chunk_content)
+                f.write("\n\n") # Add extra newline for separation between chunks
+        print(f"✅ Chunks saved to {output_file}.")
+    except Exception as e:
+        print(f"❌ Error saving chunks to {output_file}: {e}")
+    # --- End of new code ---
+
     for model in embedding_models:
         print(f"\n🧠 Embedding with model: {model}")
         persist_dir = get_persist_dir(model)
