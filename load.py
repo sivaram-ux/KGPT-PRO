@@ -1,15 +1,15 @@
 import os
 import requests
 from dotenv import load_dotenv
-
+from huggingface_hub.utils import build_hf_headers
 load_dotenv()
 
 
 
 class InferenceEmbeddingWrapper:
-    def __init__(self, model_id: str, token: str):
-        self.api_url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{model_id}"
-        self.headers = {"Authorization": f"Bearer {token}"}
+    def __init__(self, model_id: str):
+        self.api_url = f"https://api-inference.huggingface.co/models/{model_id}"
+        self.headers = build_hf_headers()
 
     def embed_query(self, text: str):
         try:
@@ -18,12 +18,13 @@ class InferenceEmbeddingWrapper:
             result = res.json()
 
             # Debug: show actual shape
-            if isinstance(result[0], list):
-                print(f"✅ Embedding dimension: {len(result[0])}")
-                return result[0]
+            if isinstance(result, list) and len(result) > 0:
+                if isinstance(result[0], list):
+                    return result[0] # Handles nested list: [[...]]
+                return result # Handles flat list: [...]
             else:
-                print(f"✅ Embedding dimension: {len(result)}")
-                return result
+                print(f"❌ Unexpected API response format: {result}")
+                return [0.0] * 768
 
         except Exception as e:
             print("❌ Inference API embedding failed:", e)
@@ -34,6 +35,6 @@ def load_inference_wrapper():
     if not hf_token:
         raise ValueError("⚠️ HF_TOKEN is not set")
 
-    model_id = "intfloat/e5-base-v2"  # ✅ 768-dim, public, matches Chroma DB
+    model_id = "BAAI/bge-base-en-v1.5"  # ✅ 768-dim, public, matches Chroma DB
     print("🔄 Using Hugging Face inference API for query embedding...")
-    return InferenceEmbeddingWrapper(model_id, hf_token)
+    return InferenceEmbeddingWrapper(model_id)

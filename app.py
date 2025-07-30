@@ -1,11 +1,12 @@
 #start by using --> uvicorn app:app --reload --host 0.0.0.0 --port 8000
 
 import os
-import time
+from typing import AsyncGenerator
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from langchain_chroma import Chroma
 from langchain_core.messages import HumanMessage
@@ -38,7 +39,7 @@ class QueryRequest(BaseModel):
 load_dotenv()
 
 embedding = load_inference_wrapper()
-persist_dir = get_persist_dir("intfloat/e5-base-v2")
+persist_dir = get_persist_dir("BAAI/bge-base-en-v1.5")
 db = Chroma(persist_directory=persist_dir, embedding_function=embedding)
 retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 5, "lambda_mult": 0.5})
 
@@ -50,17 +51,20 @@ llm = ChatOpenAI(
     model="google/gemma-3n-e4b-it:free",
     openai_api_base="https://openrouter.ai/api/v1",
     openai_api_key=openrouter_api_key,
-    temperature=0.7
+    temperature=0.7,
+    streaming=True # Ensure streaming is enabled
 )
 
 # ------------------------
 # ✅ Helper Functions
 # ------------------------
 def retrieve_chunks(query: str, k: int = 5):
+    """Retrieves document chunks synchronously."""
     docs = retriever.invoke(query)
     return [doc.page_content for doc in docs]
 
 def build_prompt(query: str, chunks: list[str]) -> str:
+    """Builds the prompt for the LLM."""
     return f"""Answer the following question based **only** on the retrieved content below.
 donot say any thing like "Based on the provided text" or "The text states that" or "According to the text" or "The text mentions that" or "The text says that" or "The text explains that" or "The text describes that" or "The text indicates that" or "The text reveals that" or "The text shows that" or "The text highlights that" or "The text suggests that" or "The text implies that".
 Use emojis if needed. Explain clearly.
@@ -72,24 +76,44 @@ Retrieved Context:
 {chr(10).join(f"- {chunk}" for chunk in chunks)}
 """
 
+async def stream_llm_response(prompt: str) -> AsyncGenerator[str, None]:
+    """
+    Yields response chunks from the LLM as they are generated using the async stream method.
+    """
+    try:
+        # Use astream for async iteration
+        async for chunk in llm.astream([HumanMessage(content=prompt)]):
+            # The actual content is in the 'content' attribute of the chunk
+            if content := chunk.content:
+                yield content
+    except Exception as e:
+        print(f"LLM streaming error: {e}")
+        # Optionally, you could yield an error message here, but it's often better
+        # to let the connection close or handle it client-side.
+
 # ------------------------
-# ✅ RAG Endpoint
+# ✅ RAG Endpoint (Streaming)
 # ------------------------
 @app.post("/query")
-def query_kgpt(data: QueryRequest):
-    start_time = time.time()
+async def query_kgpt(data: QueryRequest):
+    """
+    Handles the user query, retrieves context, and streams the LLM response.
+    """
     query = data.query.strip()
     if not query:
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
     try:
+        # 1. Retrieve context chunks (this part is still synchronous)
         chunks = retrieve_chunks(query)
+        
+        # 2. Build the prompt
         prompt = build_prompt(query, chunks)
-        response = llm.invoke([HumanMessage(content=prompt)])
-        return {
-            "query": query,
-            "response": response.content,
-            "time_taken": round(time.time() - start_time, 2),
-        }
+        
+        # 3. Create the generator and return a streaming response
+        response_generator = stream_llm_response(prompt)
+        return StreamingResponse(response_generator, media_type="text/plain")
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")
+        # This will catch errors from the synchronous parts (e.g., chunk retrieval)
+        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
