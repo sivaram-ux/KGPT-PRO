@@ -12,7 +12,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
-
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from vectorstore.chroma_utils import get_persist_dir
 # -------------------
@@ -48,13 +48,12 @@ openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
 if not openrouter_api_key:
     raise ValueError("⚠️ OPENROUTER_API_KEY not found in .env file")
 
-llm = ChatOpenAI(
-    model="google/gemma-3n-e4b-it:free",
-    openai_api_base="https://openrouter.ai/api/v1",
-    openai_api_key=openrouter_api_key,
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",  # Or "gemini-1.5-pro"
     temperature=0.7,
-    streaming=True # Ensure streaming is enabled
+    streaming=True # Streaming is handled by the .stream() or .astream() methods
 )
+
 
 # ------------------------
 # ✅ Helper Functions
