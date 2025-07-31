@@ -8,11 +8,12 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
-from load import load_inference_wrapper
+
 from vectorstore.chroma_utils import get_persist_dir
 # -------------------
 # ✅ FastAPI Setup
@@ -38,8 +39,8 @@ class QueryRequest(BaseModel):
 # ------------------------
 load_dotenv()
 
-embedding = load_inference_wrapper()
-persist_dir = get_persist_dir("BAAI/bge-base-en-v1.5")
+embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+persist_dir = get_persist_dir("models/embedding-001")
 db = Chroma(persist_directory=persist_dir, embedding_function=embedding)
 retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 5, "lambda_mult": 0.5})
 
@@ -65,9 +66,7 @@ def retrieve_chunks(query: str, k: int = 5):
 
 def build_prompt(query: str, chunks: list[str]) -> str:
     """Builds the prompt for the LLM."""
-    return f"""Answer the following question based **only** on the retrieved content below.
-donot say any thing like "Based on the provided text" or "The text states that" or "According to the text" or "The text mentions that" or "The text says that" or "The text explains that" or "The text describes that" or "The text indicates that" or "The text reveals that" or "The text shows that" or "The text highlights that" or "The text suggests that" or "The text implies that".
-Use emojis if needed. Explain clearly.
+    return f"""As an expert assistant, your task is to provide a direct and clear answer to the user's question. Base your answer **exclusively** on the information available in the 'Retrieved Context' provided below. Do not mention or allude to the context in your response. Answer as if you know the information innately. Use emojis where appropriate."
 
 Question:
 {query}
