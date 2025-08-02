@@ -1,31 +1,43 @@
-#start by using --> uvicorn app:app --reload --host 0.0.0.0 --port 8000
-
+# app.py
 import os
-from typing import AsyncGenerator
+import uuid
+from typing import AsyncGenerator, List, Dict
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_chroma import Chroma
-from langchain_core.messages import HumanMessage
-from langchain_openai import ChatOpenAI
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain.memory import ConversationBufferWindowMemory
 
 from vectorstore.chroma_utils import get_persist_dir
+
 # -------------------
 # ✅ FastAPI Setup
 # -------------------
+load_dotenv()
+
 app = FastAPI(title="KGPT RAG Server")
 
+# CORS – lock down in production!
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # You can restrict this in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Session cookie → signed UUID
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET", "replace-with-secure-random-32chars"),
+    session_cookie="kgpt_session",
+    max_age=60 * 60 * 24 * 7,  # 1 week
 )
 
 # ------------------------
@@ -35,83 +47,99 @@ class QueryRequest(BaseModel):
     query: str
 
 # ------------------------
+# ✅ RAG + Memory Store
+# ------------------------
+# Holds one ConversationBufferWindowMemory per session ID
+session_memories: Dict[str, ConversationBufferWindowMemory] = {}
+
+# ------------------------
 # ✅ Environment + Models
 # ------------------------
-load_dotenv()
-
+# Embeddings & Vectorstore
 embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 persist_dir = get_persist_dir("models/embedding-001")
 db = Chroma(persist_directory=persist_dir, embedding_function=embedding)
 retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 5, "lambda_mult": 0.5})
 
+# LLM
 openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
 if not openrouter_api_key:
     raise ValueError("⚠️ OPENROUTER_API_KEY not found in .env file")
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",  # Or "gemini-1.5-pro"
+    model="gemini-2.5-flash",
     temperature=0.7,
-    streaming=True # Streaming is handled by the .stream() or .astream() methods
+    streaming=True,
 )
-
 
 # ------------------------
 # ✅ Helper Functions
 # ------------------------
-def retrieve_chunks(query: str, k: int = 5):
-    """Retrieves document chunks synchronously."""
+def retrieve_chunks(query: str, k: int = 5) -> List[str]:
     docs = retriever.invoke(query)
     return [doc.page_content for doc in docs]
 
-def build_prompt(query: str, chunks: list[str]) -> str:
-    """Builds the prompt for the LLM."""
-    return f"""As an expert assistant, your task is to provide a direct and clear answer to the user's question. Base your answer **exclusively** on the information available in the 'Retrieved Context' provided below. Do not mention or allude to the context in your response. Answer as if you know the information innately. Use emojis where appropriate."
-
-Question:
-{query}
-
-Retrieved Context:
-{chr(10).join(f"- {chunk}" for chunk in chunks)}
-"""
-
-async def stream_llm_response(prompt: str) -> AsyncGenerator[str, None]:
-    """
-    Yields response chunks from the LLM as they are generated using the async stream method.
-    """
-    try:
-        # Use astream for async iteration
-        async for chunk in llm.astream([HumanMessage(content=prompt)]):
-            # The actual content is in the 'content' attribute of the chunk
-            if content := chunk.content:
-                yield content
-    except Exception as e:
-        print(f"LLM streaming error: {e}")
-        # Optionally, you could yield an error message here, but it's often better
-        # to let the connection close or handle it client-side.
-
 # ------------------------
-# ✅ RAG Endpoint (Streaming)
+# ✅ RAG + Window-Memory Endpoint
 # ------------------------
 @app.post("/query")
-async def query_kgpt(data: QueryRequest):
-    """
-    Handles the user query, retrieves context, and streams the LLM response.
-    """
+async def query_kgpt(request: Request, data: QueryRequest):
     query = data.query.strip()
     if not query:
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
-    try:
-        # 1. Retrieve context chunks (this part is still synchronous)
-        chunks = retrieve_chunks(query)
-        
-        # 2. Build the prompt
-        prompt = build_prompt(query, chunks)
-        
-        # 3. Create the generator and return a streaming response
-        response_generator = stream_llm_response(prompt)
-        return StreamingResponse(response_generator, media_type="text/plain")
+    # 1️⃣ Ensure a session ID
+    sid = request.session.get("id")
+    if not sid:
+        sid = str(uuid.uuid4())
+        request.session["id"] = sid
 
-    except Exception as e:
-        # This will catch errors from the synchronous parts (e.g., chunk retrieval)
-        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+    # 2️⃣ Get or create this session's WindowMemory (last 5 turns)
+    if sid not in session_memories:
+        session_memories[sid] = ConversationBufferWindowMemory(
+            k=5,
+            return_messages=True,
+            memory_key="history"
+        )
+    memory = session_memories[sid]
+
+    # 3️⃣ Load the last 5 turns
+    mem_vars = memory.load_memory_variables({})
+    history: List[HumanMessage | AIMessage] = mem_vars.get("history", [])
+
+    # 4️⃣ Retrieve RAG context
+    chunks = retrieve_chunks(query)
+
+    # 5️⃣ Build the full message list
+    system_prompt = (
+        "As an expert assistant, your task is to provide a direct and clear answer "
+        "to the user's question. Base your answer **exclusively** on the information "
+        "available in the 'Retrieved Context' below. Do not mention the context. "
+        "Answer as if you know the information innately. Use emojis where appropriate."
+    )
+
+    messages = [
+        SystemMessage(content=system_prompt),
+        *history,
+        SystemMessage(content="Retrieved Context:\n" + "\n".join(f"- {c}" for c in chunks)),
+        HumanMessage(content=query),
+    ]
+
+    # 6️⃣ Stream the LLM response and capture it
+    async def stream_gen() -> AsyncGenerator[str, None]:
+        full_response = ""
+        try:
+            async for chunk in llm.astream(messages):
+                if chunk.content:
+                    full_response += chunk.content
+                    yield chunk.content
+        except Exception as e:
+            print(f"LLM streaming error: {e}")
+        finally:
+            # 7️⃣ Save this turn into memory
+            memory.save_context(
+                {"input": query},
+                {"output": full_response}
+            )
+
+    return StreamingResponse(stream_gen(), media_type="text/plain")
