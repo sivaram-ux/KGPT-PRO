@@ -17,3 +17,4 @@ langchain-chroma
 langchain_google_genai
 
 uuid
+itsdangerous
