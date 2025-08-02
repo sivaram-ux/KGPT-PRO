@@ -26,7 +26,7 @@ app = FastAPI(title="KGPT RAG Server")
 # 1) CORS – lock to your deployed frontend domain
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://kgpt-pro-front.vercel.app"],  # ← replace with your front-end URL
+    allow_origins=["*"],  # ← replace with your front-end URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,7 +43,7 @@ app.add_middleware(
 )
 
 # ------------------------
-# ✅ Request Schema
+# ✅ Request Schema 
 # ------------------------
 class QueryRequest(BaseModel):
     query: str
