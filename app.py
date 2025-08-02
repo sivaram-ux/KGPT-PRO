@@ -23,21 +23,23 @@ load_dotenv()
 
 app = FastAPI(title="KGPT RAG Server")
 
-# CORS – lock down in production!
+# 1) CORS – lock to your deployed frontend domain
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://kgpt-pro-front.vercel.app"],  # ← replace with your front-end URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Session cookie → signed UUID
+# 2) Session cookie → signed UUID (SameSite=None, Secure for cross-site POST over HTTPS)
 app.add_middleware(
     SessionMiddleware,
     secret_key=os.getenv("SESSION_SECRET", "replace-with-secure-random-32chars"),
     session_cookie="kgpt_session",
-    max_age=60 * 60 * 24 * 7,  # 1 week
+    max_age=60 * 60 * 24 * 7,   # 1 week
+    same_site="none",           # allow cross-site
+    https_only=True             # only over HTTPS
 )
 
 # ------------------------
@@ -49,7 +51,7 @@ class QueryRequest(BaseModel):
 # ------------------------
 # ✅ RAG + Memory Store
 # ------------------------
-# Holds one ConversationBufferWindowMemory per session ID
+# one ConversationBufferWindowMemory per session ID
 session_memories: Dict[str, ConversationBufferWindowMemory] = {}
 
 # ------------------------
@@ -58,6 +60,7 @@ session_memories: Dict[str, ConversationBufferWindowMemory] = {}
 # Embeddings & Vectorstore
 embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 persist_dir = get_persist_dir("models/embedding-001")
+os.makedirs(persist_dir, exist_ok=True)
 db = Chroma(persist_directory=persist_dir, embedding_function=embedding)
 retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 5, "lambda_mult": 0.5})
 
@@ -88,13 +91,13 @@ async def query_kgpt(request: Request, data: QueryRequest):
     if not query:
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
-    # 1️⃣ Ensure a session ID
+    # 1️⃣ Ensure a session ID in the signed cookie
     sid = request.session.get("id")
     if not sid:
         sid = str(uuid.uuid4())
         request.session["id"] = sid
 
-    # 2️⃣ Get or create this session's WindowMemory (last 5 turns)
+    # 2️⃣ Get or create this session's 5-turn window memory
     if sid not in session_memories:
         session_memories[sid] = ConversationBufferWindowMemory(
             k=5,
@@ -103,14 +106,14 @@ async def query_kgpt(request: Request, data: QueryRequest):
         )
     memory = session_memories[sid]
 
-    # 3️⃣ Load the last 5 turns
+    # 3️⃣ Load the last 5 turns from memory
     mem_vars = memory.load_memory_variables({})
     history: List[HumanMessage | AIMessage] = mem_vars.get("history", [])
 
     # 4️⃣ Retrieve RAG context
     chunks = retrieve_chunks(query)
 
-    # 5️⃣ Build the full message list
+    # 5️⃣ Build the full message sequence
     system_prompt = (
         "As an expert assistant, your task is to provide a direct and clear answer "
         "to the user's question. Base your answer **exclusively** on the information "
@@ -136,7 +139,7 @@ async def query_kgpt(request: Request, data: QueryRequest):
         except Exception as e:
             print(f"LLM streaming error: {e}")
         finally:
-            # 7️⃣ Save this turn into memory
+            # 7️⃣ Save this turn into memory (auto-prunes oldest if >5)
             memory.save_context(
                 {"input": query},
                 {"output": full_response}
