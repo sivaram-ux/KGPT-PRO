@@ -1,0 +1,124 @@
+✅ Academic Information:
+1. Courses & Curriculum
+Course details (credits, syllabus, instructor details)
+
+Academic programs (Undergraduate, Postgraduate, PhD)
+
+Elective/compulsory course lists
+
+Timetable, class schedules
+
+2. Academic Calendar & Events
+Semester schedules (start/end dates, exam schedules)
+
+Important deadlines (course registration, grade submission, add-drop courses)
+
+Holiday schedule
+
+Workshops, seminars, conferences
+
+3. Examinations & Results
+Grading system & policies
+
+Exam schedules (Mid-semester, End-semester)
+
+Result declaration dates
+
+Re-exam or improvement exam policies
+
+4. Placement Information
+Placement statistics (branch-wise/company-wise)
+
+Internship information and opportunities
+
+Interview preparation materials
+
+Contact details of placement office
+
+5. Faculty Information
+Profiles, research areas, contact details
+
+Office hours or consultation schedules
+
+6. Research & Labs
+Ongoing projects, lab details, facilities available
+
+Project application procedures
+
+Funding/grant details
+
+7. Administration & Policies
+Academic rules & regulations
+
+Scholarship details, financial aid, fee structure
+
+Leave policies, attendance rules
+
+✅ Non-Academic Information:
+1. Campus Facilities
+Hostel details (room allotment policies, fees, amenities)
+
+Mess, canteen, dining options, menu details
+
+Library timings, rules, and services
+
+Medical facilities & emergency contacts
+
+Sports, gym, recreational centers
+
+2. Student Activities & Clubs
+Information about student societies and clubs
+
+Cultural festivals (Spring Fest, Kshitij, etc.)
+
+Tech events, hackathons, coding contests
+
+Community engagement & volunteering activities
+
+3. Transport & Accessibility
+Campus map & locations
+
+Shuttle/bus schedules
+
+Travel options (railway station, airport connectivity)
+
+4. Safety & Emergency Contacts
+Campus security details
+
+Emergency contact numbers (Medical, Security, Maintenance)
+
+5. Campus Life & Tips
+FAQs for freshmen (Orientation, campus life)
+
+Tips on balancing academics and extracurriculars
+
+Nearby attractions (restaurants, cafes, hangout spots)
+
+6. Career & Alumni
+Alumni success stories, profiles
+
+Networking and mentorship opportunities
+
+Career guidance, counseling contacts
+
+✅ Dynamic & External Information (For Web-search integration):
+Recent announcements: Notifications from the institute website.
+
+News & Updates: Latest happenings/events (seminars, guest lectures).
+
+Weather and Local Info: Real-time weather and locality updates.
+
+Transportation: Train, bus schedules, and travel-related updates.
+
+✅ Technical & Metadata Requirements (for RAG and Semantic Search):
+Documents & Sources: URLs, PDFs, Docx files, etc.
+
+Chunked content: Text split into logical chunks (~500-1000 tokens).
+
+Metadata (essential for retrieval efficiency):
+
+Source URL
+
+Date of last update
+
+Category tags (e.g., course details, placements, hostel)

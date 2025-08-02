@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+python-dotenv
+pydantic
+langchain-core
+langchain-openai
+langchain-chroma
+# If you use OpenAI models locally, you may need openai
+openai
+# For CORS middleware
+starlette
+# Workspace-specific modules (local imports, not on PyPI)
+# gemini (local: gemini/validator.py)
+# vectorstore (local: vectorstore/chroma_utils.py)
+# load (local: load.py)
+# config (local: config.py)
