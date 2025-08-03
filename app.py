@@ -62,7 +62,7 @@ embedding = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 persist_dir = get_persist_dir("models/embedding-001")
 os.makedirs(persist_dir, exist_ok=True)
 db = Chroma(persist_directory=persist_dir, embedding_function=embedding)
-retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 5, "lambda_mult": 0.5})
+retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 5, "lambda_mult": 0.8})
 
 # LLM
 openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
@@ -72,6 +72,12 @@ if not openrouter_api_key:
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
     temperature=0.7,
+    streaming=True,
+)
+
+llm_less_temp = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
+    temperature=0.2,
     streaming=True,
 )
 
@@ -90,7 +96,7 @@ async def query_kgpt(request: Request, data: QueryRequest):
     query = data.query.strip()
     if not query:
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
-
+    
     # 1️⃣ Ensure a session ID in the signed cookie
     sid = request.session.get("id")
     if not sid:
@@ -109,6 +115,17 @@ async def query_kgpt(request: Request, data: QueryRequest):
     # 3️⃣ Load the last 5 turns from memory
     mem_vars = memory.load_memory_variables({})
     history: List[HumanMessage | AIMessage] = mem_vars.get("history", [])
+
+    system_prompt_for_updating_query =(f"give me the best version of query to use for RAG, first of check the history of the conversation, ")
+    messages = [
+        SystemMessage(content=system_prompt_for_updating_query),
+        *history,
+        SystemMessage(content="Now refine the query based on the conversation history to use for RAG, Just give me Query for retrieval, no explanation needed. Expand the keyword into a more detailed query so that I can best from my vector database, do not expand fullforms"),
+        HumanMessage(content="Query:"+query),
+    ]
+    query = llm_less_temp.invoke(messages).content.strip()
+    print(f"Refined query for RAG: {query}")
+
 
     # 4️⃣ Retrieve RAG context
     chunks = retrieve_chunks(query)
