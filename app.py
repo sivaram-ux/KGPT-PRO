@@ -115,33 +115,10 @@ async def query_kgpt(request: Request, data: QueryRequest):
     # 3️⃣ Load the last 5 turns from memory
     mem_vars = memory.load_memory_variables({})
     history: List[HumanMessage | AIMessage] = mem_vars.get("history", [])
-
-    system_prompt_for_updating_query =(f"give me the best version of query to use for RAG, first of check the history of the conversation, ")
-    messages = [
-        SystemMessage(content=(
-   """ You are a query refinement assistant for a Retrieval-Augmented Generation (RAG) system.
-
-Your task:
-- Read the provided conversation history to understand the student's intent.
-- Use the latest student query as the main focus.
-- Expand it with related keywords or relevant phrases to improve retrieval results.
-- Keep the technical meaning exactly the same.
-- Do not expand abbreviations or full forms unless the user already spelled them out.
-- Return only the refined query, without any explanation or extra text.
-
-You must output a single query string."""
-
-)),
-*history,
-HumanMessage(content="Query: " + query)
-
-    ]
-    query = llm_less_temp.invoke(messages).content.strip()
-    print(f"Refined query for RAG: {query}")
-
-
     # 4️⃣ Retrieve RAG context
     chunks = retrieve_chunks(query)
+    for i,chunk in enumerate(chunks):
+        print(f"chunk{i}:{chunk}")
 
     # 5️⃣ Build the full message sequence
     system_prompt = (
