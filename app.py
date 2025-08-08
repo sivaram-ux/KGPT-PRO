@@ -84,7 +84,7 @@ llm_less_temp = ChatGoogleGenerativeAI(
 # ------------------------
 # ✅ Helper Functions
 # ------------------------
-def retrieve_chunks(query: str, k: int = 5) -> List[str]:
+def retrieve_chunks(query: str, k: int = 9) -> List[str]:
     docs = retriever.invoke(query)
     return [doc.page_content for doc in docs]
 
@@ -106,7 +106,7 @@ async def query_kgpt(request: Request, data: QueryRequest):
     # 2️⃣ Get or create this session's 5-turn window memory
     if sid not in session_memories:
         session_memories[sid] = ConversationBufferWindowMemory(
-            k=5,
+            k=9,
             return_messages=True,
             memory_key="history"
         )
@@ -118,10 +118,23 @@ async def query_kgpt(request: Request, data: QueryRequest):
 
     system_prompt_for_updating_query =(f"give me the best version of query to use for RAG, first of check the history of the conversation, ")
     messages = [
-        SystemMessage(content=system_prompt_for_updating_query),
-        *history,
-        SystemMessage(content="Now refine the query based on the conversation history to use for RAG, Just give me Query for retrieval, no explanation needed. Expand the keyword into a more detailed query so that I can best from my vector database, do not expand fullforms"),
-        HumanMessage(content="Query:"+query),
+        SystemMessage(content=(
+    You are a query refinement assistant for a Retrieval-Augmented Generation (RAG) system.
+
+Your task:
+- Read the provided conversation history to understand the student's intent.
+- Use the latest student query as the main focus.
+- Expand it with related keywords or relevant phrases to improve retrieval results.
+- Keep the technical meaning exactly the same.
+- Do not expand abbreviations or full forms unless the user already spelled them out.
+- Return only the refined query, without any explanation or extra text.
+
+You must output a single query string.
+
+)),
+*history,
+HumanMessage(content="Query: " + query)
+
     ]
     query = llm_less_temp.invoke(messages).content.strip()
     print(f"Refined query for RAG: {query}")
@@ -132,10 +145,17 @@ async def query_kgpt(request: Request, data: QueryRequest):
 
     # 5️⃣ Build the full message sequence
     system_prompt = (
-        "As an expert assistant, your task is to provide a direct and clear answer "
-        "to the user's question. Base your answer **exclusively** on the information "
-        "available in the 'Retrieved Context' below. Do not mention the context. "
-        "Answer as if you know the information innately. Use emojis where appropriate."
+        You are an expert assistant for answering questions based on IIT Kharagpur-related knowledge using a hidden Retrieval-Augmented Generation (RAG) process.
+
+Your rules:
+- The user must never know that you have retrieved any external context or documents.
+- Never mention, refer to, or hint about having any "retrieved context", "sources", "documents", or "search results".
+- Present your answer as if it comes entirely from your own internal knowledge as a highly trained LLM on IIT KGP data.
+- Base your answer exclusively on the retrieved context provided internally to you.
+- If there is insufficient information to answer, apologize politely and simply say you cannot answer — without mentioning context availability.
+- Give direct, clear, and well-structured responses.
+- Use emojis where appropriate to make answers more engaging.
+
     )
 
     messages = [
